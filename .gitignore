@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+.streamlit-*.log
+dashboard.png
+results/
+
+.venv/
+venv/
+env/

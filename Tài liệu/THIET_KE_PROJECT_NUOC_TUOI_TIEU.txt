@@ -1,0 +1,1031 @@
+================================================================================
+   THIẾT KẾ PROJECT: PHÂN BỔ NƯỚC TƯỚI TIÊU NÔNG NGHIỆP THÔNG MINH
+   Môn: Trí Tuệ Nhân Tạo | GA + SA + PSO + Hybrid
+   Tham khảo kiến trúc: Flappy Bird Genetic Algorithm
+================================================================================
+
+TỔNG QUAN
+---------
+Tên project  : SmartIrrigationAI
+Tổng số file : 26 file Python + 3 file phụ trợ
+Ngôn ngữ     : Python 3.11
+Thư viện     : numpy, matplotlib, streamlit, scipy, pandas
+Giao diện    : Streamlit Multipage Web App
+Mục tiêu     : Tối ưu phân bổ nước tưới cho N thửa ruộng, minimize chi phí
+               bơm + penalty thiếu nước + penalty lãng phí
+
+CẤU TRÚC THƯ MỤC
+-----------------
+SmartIrrigationAI/
+│
+├── core/                          (4 file — nền tảng dùng chung)
+│   ├── __init__.py
+│   ├── config.py
+│   ├── data.py
+│   ├── fitness.py
+│   └── constraints.py
+│
+├── algorithms/                    (6 file — các thuật toán AI)
+│   ├── __init__.py
+│   ├── base.py
+│   ├── operators.py
+│   ├── ga.py
+│   ├── sa.py
+│   ├── pso.py
+│   └── hybrid.py
+│
+├── analysis/                      (4 file — thực nghiệm & thống kê)
+│   ├── __init__.py
+│   ├── runner.py
+│   ├── comparator.py
+│   ├── statistics.py
+│   └── tuner.py
+│
+├── visualization/                 (5 file — biểu đồ)
+│   ├── __init__.py
+│   ├── convergence.py
+│   ├── allocation.py
+│   ├── heatmap.py
+│   ├── boxplot.py
+│   └── dashboard.py
+│
+├── webapp/                        (7 file — giao diện Streamlit)
+│   ├── app.py
+│   ├── session.py
+│   ├── components/
+│   │   ├── chart_widget.py
+│   │   ├── result_table.py
+│   │   └── metric_card.py
+│   └── pages/
+│       ├── 01_input.py
+│       ├── 02_run.py
+│       └── 03_result.py
+│
+├── tests/                         (file kiểm thử)
+│   ├── test_fitness.py
+│   ├── test_operators.py
+│   └── test_constraints.py
+│
+├── main.py                        (chạy so sánh từ terminal)
+├── requirements.txt
+└── README.md
+
+================================================================================
+PHẦN 1: PACKAGE core/
+================================================================================
+
+--------------------------------------------------------------------------------
+FILE: core/config.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Tập trung TOÀN BỘ tham số của project vào 1 file duy nhất.
+  Học từ Flappy Bird: họ để GAME_FPS, PIPE_GAP... ở config.py — thay đổi
+  1 chỗ là ảnh hưởng toàn bộ. Project này làm tương tự.
+
+NỘI DUNG CẦN CÓ:
+
+  [Dữ liệu bài toán]
+  N_FIELDS = 10              # Số thửa ruộng
+  W_TOTAL = 350              # Tổng nước có thể bơm (m³/ngày)
+
+  [Tham số GA]
+  GA_POP_SIZE = 100          # Số cá thể trong quần thể
+  GA_MAX_GEN = 300           # Số thế hệ tối đa
+  GA_CROSSOVER_RATE = 0.8    # Xác suất lai ghép
+  GA_MUTATION_RATE = 0.1     # Xác suất đột biến mỗi gen
+  GA_MUTATION_SIGMA = 3.0    # Độ lệch chuẩn Gaussian mutation
+  GA_TOURNAMENT_K = 3        # Số cá thể trong tournament selection
+  GA_ELITE_RATIO = 0.05      # Tỉ lệ elite giữ lại (5%)
+  GA_BLX_ALPHA = 0.5         # Tham số BLX-alpha crossover
+
+  [Tham số SA]
+  SA_T_MAX = 200.0           # Nhiệt độ khởi đầu
+  SA_T_MIN = 0.1             # Nhiệt độ kết thúc
+  SA_ALPHA = 0.97            # Tốc độ làm nguội
+  SA_ITER_PER_T = 100        # Số bước lặp tại mỗi mức nhiệt độ
+  SA_NEIGHBOR_SIGMA = 3.0    # Độ lớn bước lân cận
+
+  [Tham số PSO]
+  PSO_N_PARTICLES = 50       # Số hạt
+  PSO_MAX_ITER = 300         # Số vòng lặp tối đa
+  PSO_W = 0.7                # Trọng số quán tính
+  PSO_C1 = 1.5               # Hệ số nhận thức cá nhân
+  PSO_C2 = 1.5               # Hệ số nhận thức xã hội
+  PSO_V_MAX = 5.0            # Vận tốc tối đa mỗi chiều
+
+  [Tham số Hybrid GA+SA]
+  HYBRID_GA_GEN = 200        # GA chạy bao nhiêu thế hệ trước khi chuyển SA
+  HYBRID_SA_T_MAX = 50.0     # SA bắt đầu ở nhiệt độ thấp hơn (GA đã tìm vùng tốt)
+
+  [Hàm fitness — trọng số]
+  ALPHA_PENALTY = 10         # Phạt thiếu nước (bình phương → phạt nặng)
+  BETA_WASTE = 3             # Phạt lãng phí (tuyến tính)
+  GAMMA_COST = 1             # Trọng số chi phí bơm
+
+  [Thực nghiệm]
+  N_RUNS = 10                # Số lần chạy mỗi thuật toán để lấy thống kê
+
+--------------------------------------------------------------------------------
+FILE: core/data.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Lưu trữ dữ liệu mô phỏng 10 thửa ruộng. Đây là "môi trường bài toán"
+  tương tự như Pipes trong Flappy Bird — định nghĩa áp lực cần tối ưu.
+
+NỘI DUNG CẦN CÓ:
+
+  FIELDS = danh sách 10 dict, mỗi dict gồm:
+    - id        : số thứ tự thửa ruộng (1-10)
+    - name      : tên ("Thửa 1")
+    - crop      : loại cây ("Lúa nước", "Rau cải", "Cà chua"...)
+    - demand_min: nhu cầu nước tối thiểu (m³/ngày) — ràng buộc cứng
+    - demand_max: nhu cầu nước tối đa (m³/ngày) — ràng buộc cứng
+    - price     : giá bơm (đ/m³) — phụ thuộc khung giờ
+
+  Bảng dữ liệu theo báo cáo:
+    Thửa 1  | Lúa nước  | min=40 | max=60 | price=2.0 (cao điểm)
+    Thửa 2  | Rau cải   | min=20 | max=30 | price=1.0 (thấp điểm)
+    Thửa 3  | Cà chua   | min=30 | max=50 | price=1.5 (bình thường)
+    Thửa 4  | Lúa nước  | min=38 | max=58 | price=2.0 (cao điểm)
+    Thửa 5  | Dưa leo   | min=25 | max=40 | price=1.0 (thấp điểm)
+    Thửa 6  | Rau muống | min=15 | max=25 | price=1.5 (bình thường)
+    Thửa 7  | Lúa nước  | min=42 | max=62 | price=2.0 (cao điểm)
+    Thửa 8  | Ớt        | min=28 | max=45 | price=1.0 (thấp điểm)
+    Thửa 9  | Cà chua   | min=32 | max=52 | price=1.5 (bình thường)
+    Thửa 10 | Rau cải   | min=18 | max=28 | price=1.0 (thấp điểm)
+
+  Tổng nhu cầu tối thiểu : 288 m³
+  Tổng nhu cầu tối đa    : 450 m³
+  W_TOTAL                : 350 m³ (tạo ra cạnh tranh nguồn lực)
+
+  HÀM TIỆN ÍCH (cần viết):
+    get_demand_min()  → numpy array [40, 20, 30, 38, 25, 15, 42, 28, 32, 18]
+    get_demand_max()  → numpy array [60, 30, 50, 58, 40, 25, 62, 45, 52, 28]
+    get_prices()      → numpy array [2.0, 1.0, 1.5, 2.0, 1.0, 1.5, 2.0, 1.0, 1.5, 1.0]
+    get_field_names() → list tên thửa ruộng để hiển thị
+    get_crop_names()  → list tên cây trồng để hiển thị
+
+--------------------------------------------------------------------------------
+FILE: core/fitness.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Hàm tính điểm fitness — trung tâm của toàn bộ project.
+  Được GA, SA, PSO, Hybrid đều gọi. Tương tự Bird.score trong Flappy Bird
+  nhưng ở đây là minimize (fitness càng thấp càng tốt).
+
+CÔNG THỨC CHÍNH:
+  fitness(x) = ALPHA * penalty_thieu(x)
+             + BETA  * penalty_lang_phi(x)
+             + GAMMA * chi_phi_bom(x)
+
+  penalty_thieu(x)    = Σ max(0, demand_min[i] - x[i])²
+  penalty_lang_phi(x) = Σ max(0, x[i] - demand_max[i])
+  chi_phi_bom(x)      = Σ x[i] * price[i]
+
+HÀM CẦN VIẾT:
+
+  fitness(x, demand_min, demand_max, prices)
+    - x: numpy array lượng nước [w1..w10]
+    - Trả về: float — tổng fitness (càng nhỏ càng tốt)
+    - Ghi chú: dùng numpy vectorized (không dùng for loop)
+
+  penalty_water_shortage(x, demand_min)
+    - Trả về: float — tổng penalty thiếu nước (bình phương)
+    - Lý do bình phương: phạt nặng khi thiếu nhiều, ưu tiên tuyệt đối
+
+  penalty_water_waste(x, demand_max)
+    - Trả về: float — tổng penalty lãng phí (tuyến tính)
+
+  pumping_cost(x, prices)
+    - Trả về: float — tổng chi phí bơm
+
+  fitness_breakdown(x, demand_min, demand_max, prices)
+    - Trả về: dict gồm shortage_penalty, waste_penalty, cost, total
+    - Dùng để hiển thị chi tiết trên giao diện Streamlit
+
+LƯU Ý QUAN TRỌNG:
+  - Toàn bộ dùng numpy, không dùng Python for loop → nhanh hơn 10-50x
+  - Hàm này được gọi hàng chục nghìn lần → phải tối ưu tốc độ
+  - Trọng số alpha, beta, gamma lấy từ core/config.py
+
+--------------------------------------------------------------------------------
+FILE: core/constraints.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Tách riêng logic kiểm tra ràng buộc khỏi fitness.
+  Giúp các thuật toán tự sửa nghiệm vi phạm mà không cần tính penalty.
+
+HÀM CẦN VIẾT:
+
+  clip_to_bounds(x, demand_min, demand_max)
+    - Clip x vào [demand_min[i], demand_max[i]] cho từng chiều
+    - Gọi sau mỗi lần mutation/crossover để đảm bảo ràng buộc cứng
+    - Dùng numpy.clip()
+
+  is_feasible(x, demand_min, demand_max)
+    - Kiểm tra x có thỏa ràng buộc cứng không
+    - Trả về: bool
+
+  water_budget_violation(x, W_total)
+    - Tính mức vi phạm ngân sách nước: max(0, sum(x) - W_total)
+    - Trả về: float (0 nếu không vi phạm)
+
+  repair_solution(x, demand_min, demand_max, W_total)
+    - Sửa nghiệm vi phạm ngân sách nước bằng cách scale xuống tỉ lệ
+    - Bước 1: clip về [min, max]
+    - Bước 2: nếu sum(x) > W_total thì scale tỉ lệ, sau đó clip lại
+    - Trả về: x đã sửa (numpy array)
+
+================================================================================
+PHẦN 2: PACKAGE algorithms/
+================================================================================
+
+--------------------------------------------------------------------------------
+FILE: algorithms/base.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Abstract base class định nghĩa interface chung cho tất cả thuật toán.
+  Học từ Flappy Bird: Bird có interface clone()/receive_genes() chuẩn.
+  Ở đây BaseOptimizer có interface solve()/get_history() chuẩn.
+  Nhờ đó analysis/runner.py có thể chạy bất kỳ thuật toán nào giống nhau.
+
+NỘI DUNG CLASS BaseOptimizer:
+
+  __init__(self, fields_data, config):
+    - Lưu demand_min, demand_max, prices, W_total
+    - Khởi tạo self.best_solution = None
+    - Khởi tạo self.best_fitness = float('inf')
+    - Khởi tạo self.history = []   ← list fitness tốt nhất theo mỗi bước
+
+  solve(self) → [abstract]
+    - Chạy thuật toán từ đầu đến cuối
+    - Cập nhật self.best_solution, self.best_fitness, self.history
+    - Trả về: best_solution (numpy array)
+
+  get_history(self) → list
+    - Trả về self.history để vẽ convergence curve
+
+  get_best_fitness(self) → float
+    - Trả về self.best_fitness
+
+  get_result_summary(self) → dict
+    - Trả về dict gồm: best_solution, best_fitness, history, n_iterations
+    - Dùng để truyền sang visualization và webapp
+
+  _evaluate(self, x) → float
+    - Gọi fitness() từ core/fitness.py
+    - Wrapper ngắn để các subclass dùng
+
+  _random_solution(self) → numpy array
+    - Tạo nghiệm ngẫu nhiên hợp lệ trong [demand_min, demand_max]
+    - Dùng numpy.random.uniform()
+
+--------------------------------------------------------------------------------
+FILE: algorithms/operators.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Tập hợp TẤT CẢ toán tử di truyền/tối ưu vào 1 file độc lập.
+  Học trực tiếp từ Flappy Bird: genetic_engine.py tách mutate(),
+  combine_brain(), clone_bird() ra riêng — không nhét vào class GA.
+
+  *** ĐÂY LÀ FILE QUAN TRỌNG NHẤT CỦA PACKAGE algorithms/ ***
+  *** Toàn bộ GA, SA, PSO đều import từ đây ***
+
+CÁC HÀM CẦN VIẾT:
+
+  [GA Operators]
+
+  tournament_selection(population, fitnesses, k=3)
+    - Bốc ngẫu nhiên k cá thể, trả về cá thể fitness thấp nhất
+    - population: list numpy array
+    - fitnesses : list float
+    - k         : kích thước tournament (config GA_TOURNAMENT_K)
+    - Trả về    : numpy array (chromosome thắng)
+
+  blx_alpha_crossover(parent1, parent2, alpha=0.5)
+    - BLX-α crossover cho mã hóa số thực
+    - Với mỗi gen i: tạo con trong [lo - alpha*d, hi + alpha*d]
+      trong đó lo=min(p1[i],p2[i]), hi=max(p1[i],p2[i]), d=hi-lo
+    - Trả về: child1, child2 (2 numpy array)
+    - Học từ combine_brain() của Flappy Bird nhưng đúng chuẩn BLX-α
+    - CẢI TIẾN so với Flappy Bird: tỉ lệ đóng góp theo fitness
+
+  weighted_crossover(parent1, parent2, fitness1, fitness2)
+    - Crossover có trọng số theo fitness (khắc phục bug Flappy Bird)
+    - parent tốt hơn (fitness thấp hơn) đóng góp gen nhiều hơn
+    - ratio1 = fitness2 / (fitness1 + fitness2)  ← fitness thấp → ratio cao
+    - child = ratio1 * parent1 + (1-ratio1) * parent2
+    - Trả về: child (numpy array)
+
+  gaussian_mutation(chromosome, mutation_rate, sigma, demand_min, demand_max)
+    - Với mỗi gen: xác suất mutation_rate → cộng nhiễu N(0, sigma)
+    - Sau mutation: clip về [demand_min[i], demand_max[i]]
+    - Trả về: chromosome đã mutate (numpy array mới, không sửa in-place)
+    - Học từ mutate() của Flappy Bird, thêm clip để đảm bảo ràng buộc
+
+  elitism(population, fitnesses, elite_ratio=0.05)
+    - Chọn top elite_ratio% cá thể tốt nhất
+    - Trả về: list numpy array (elite individuals)
+
+  [SA Operators]
+
+  generate_neighbor(x, sigma, demand_min, demand_max)
+    - Thay đổi 1 chiều ngẫu nhiên bằng Gaussian noise N(0, sigma)
+    - Clip về bounds sau khi thay đổi
+    - Trả về: x_new (numpy array mới)
+
+  acceptance_probability(delta_fitness, temperature)
+    - Tính xác suất chấp nhận nghiệm xấu hơn
+    - Nếu delta_fitness < 0: trả về 1.0 (luôn chấp nhận tốt hơn)
+    - Nếu delta_fitness >= 0: trả về exp(-delta_fitness / temperature)
+
+  cooling_schedule(T, alpha)
+    - Làm nguội: trả về T * alpha
+
+  [PSO Operators]
+
+  update_velocity(v, x, pbest, gbest, w, c1, c2)
+    - Cập nhật vận tốc hạt theo công thức PSO chuẩn:
+      v_new = w*v + c1*r1*(pbest-x) + c2*r2*(gbest-x)
+    - r1, r2: random uniform [0,1]
+    - Clip vận tốc về [-V_MAX, V_MAX]
+    - Trả về: v_new (numpy array)
+
+  update_position(x, v, demand_min, demand_max)
+    - Cập nhật vị trí: x_new = x + v
+    - Clip về [demand_min, demand_max]
+    - Trả về: x_new (numpy array)
+
+--------------------------------------------------------------------------------
+FILE: algorithms/ga.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Cài đặt Genetic Algorithm thuần. Kế thừa BaseOptimizer.
+  Tương tự BirdFlock trong Flappy Bird — quản lý toàn bộ quần thể.
+
+CLASS GeneticAlgorithm(BaseOptimizer):
+
+  __init__(self, fields_data, config):
+    - Gọi super().__init__()
+    - self.population = []   ← list numpy array (các chromosome)
+    - self.fitnesses = []    ← list float
+
+  _initialize_population(self):
+    - Tạo GA_POP_SIZE cá thể ngẫu nhiên hợp lệ
+    - Mỗi cá thể: _random_solution() từ BaseOptimizer
+    - Lưu vào self.population
+
+  _evaluate_population(self):
+    - Tính fitness cho toàn bộ self.population
+    - Cập nhật self.fitnesses
+    - Cập nhật self.best_solution, self.best_fitness nếu có cá thể tốt hơn
+
+  _next_generation(self):
+    - Bước 1: Giữ lại elite (elitism từ operators.py)
+    - Bước 2: Vòng lặp tạo children:
+        + Chọn parent1, parent2 qua tournament_selection()
+        + Crossover với xác suất GA_CROSSOVER_RATE → dùng blx_alpha_crossover()
+        + Mutation với GA_MUTATION_RATE → dùng gaussian_mutation()
+        + Sửa nghiệm → clip_to_bounds() từ constraints.py
+    - Bước 3: Thay thế population cũ bằng population mới
+
+  solve(self) → numpy array:
+    - Gọi _initialize_population()
+    - Vòng lặp GA_MAX_GEN thế hệ:
+        + _evaluate_population()
+        + Lưu self.best_fitness vào self.history
+        + _next_generation()
+    - Trả về self.best_solution
+
+  get_population_diversity(self) → float:
+    - Tính độ đa dạng quần thể = std trung bình các gen
+    - Dùng để phát hiện premature convergence
+
+--------------------------------------------------------------------------------
+FILE: algorithms/sa.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Cài đặt Simulated Annealing thuần. Kế thừa BaseOptimizer.
+  Làm việc với 1 nghiệm duy nhất, di chuyển từng bước.
+
+CLASS SimulatedAnnealing(BaseOptimizer):
+
+  __init__(self, fields_data, config):
+    - Gọi super().__init__()
+    - self.temperature_history = []   ← lưu T theo thời gian (để vẽ)
+
+  solve(self) → numpy array:
+    - Bước 1: Khởi tạo nghiệm ngẫu nhiên x_current
+    - Bước 2: T = SA_T_MAX
+    - Bước 3: Vòng lặp ngoài (T > SA_T_MIN):
+        + Vòng lặp trong (SA_ITER_PER_T bước):
+            * x_new = generate_neighbor(x_current, sigma, bounds)
+            * delta = fitness(x_new) - fitness(x_current)
+            * p = acceptance_probability(delta, T)
+            * Nếu random() < p: x_current = x_new
+            * Cập nhật best nếu x_new tốt hơn
+        + T = cooling_schedule(T, SA_ALPHA)
+        + Lưu best_fitness vào self.history
+        + Lưu T vào self.temperature_history
+    - Trả về self.best_solution
+
+  get_temperature_history(self) → list:
+    - Trả về lịch sử nhiệt độ để vẽ biểu đồ cooling curve
+
+--------------------------------------------------------------------------------
+FILE: algorithms/pso.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Cài đặt Particle Swarm Optimization — thuật toán bổ sung so với báo cáo gốc.
+  PSO mô phỏng đàn chim/cá tìm kiếm thức ăn — phù hợp với chủ đề nông nghiệp.
+
+CLASS ParticleSwarmOptimization(BaseOptimizer):
+
+  __init__(self, fields_data, config):
+    - Gọi super().__init__()
+    - self.positions = []    ← vị trí các hạt (numpy array)
+    - self.velocities = []   ← vận tốc các hạt
+    - self.pbest = []        ← best position từng hạt
+    - self.pbest_fitness = []← best fitness từng hạt
+    - self.gbest = None      ← best position toàn đàn
+    - self.gbest_fitness = float('inf')
+
+  _initialize_swarm(self):
+    - Tạo PSO_N_PARTICLES hạt ngẫu nhiên
+    - Vận tốc khởi đầu = 0 hoặc random nhỏ
+    - pbest[i] = position[i] ban đầu
+
+  solve(self) → numpy array:
+    - Gọi _initialize_swarm()
+    - Vòng lặp PSO_MAX_ITER:
+        + Đánh giá fitness tất cả hạt
+        + Cập nhật pbest, gbest
+        + Cập nhật velocity: update_velocity()
+        + Cập nhật position: update_position()
+        + Lưu gbest_fitness vào self.history
+    - Trả về self.gbest
+
+--------------------------------------------------------------------------------
+FILE: algorithms/hybrid.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Kết hợp GA (khám phá rộng) + SA (tinh chỉnh cục bộ).
+  GA chạy HYBRID_GA_GEN thế hệ → lấy best → SA tinh chỉnh.
+
+CLASS HybridGASA(BaseOptimizer):
+
+  __init__(self, fields_data, config):
+    - Gọi super().__init__()
+    - self.ga = GeneticAlgorithm(...) với MAX_GEN=HYBRID_GA_GEN
+    - self.sa = SimulatedAnnealing(...) với T_MAX=HYBRID_SA_T_MAX
+
+  solve(self) → numpy array:
+    - Bước 1: Chạy GA (HYBRID_GA_GEN thế hệ)
+        + ga.solve()
+        + x0 = ga.best_solution
+        + ga_history = ga.get_history()
+    - Bước 2: Dùng x0 làm điểm xuất phát cho SA
+        + sa._current_solution = x0  ← quan trọng
+        + sa.solve()
+        + sa_history = sa.get_history()
+    - Bước 3: Ghép history
+        + self.history = ga_history + sa_history
+        + self.best_solution = sa.best_solution
+    - Trả về self.best_solution
+
+  get_phase_boundary(self) → int:
+    - Trả về vị trí ranh giới GA→SA trong history
+    - Dùng để vẽ đường phân chia trên convergence chart
+
+================================================================================
+PHẦN 3: PACKAGE analysis/
+================================================================================
+
+--------------------------------------------------------------------------------
+FILE: analysis/runner.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Chạy thực nghiệm tự động: N_RUNS lần mỗi thuật toán, ghi log đầy đủ.
+  Nhờ BaseOptimizer có interface chuẩn, runner không cần biết thuật toán nào.
+
+CLASS ExperimentRunner:
+
+  __init__(self, algorithms_list, fields_data, config, n_runs=10):
+    - algorithms_list: list tên thuật toán ["GA", "SA", "PSO", "Hybrid"]
+    - self.results = {}   ← dict lưu kết quả từng thuật toán
+
+  run_single(self, algo_name, run_id) → dict:
+    - Tạo instance thuật toán tương ứng
+    - Gọi solve()
+    - Ghi lại: best_fitness, best_solution, history, runtime
+    - Trả về dict kết quả 1 lần chạy
+
+  run_all(self, callback=None) → dict:
+    - Chạy tất cả thuật toán, mỗi cái N_RUNS lần
+    - callback: function gọi sau mỗi lần chạy (dùng để cập nhật progress bar)
+    - Trả về: dict toàn bộ kết quả
+
+  get_best_per_algo(self) → dict:
+    - Trả về best fitness qua tất cả các lần chạy cho từng thuật toán
+
+  save_results(self, filepath):
+    - Lưu kết quả ra file JSON để dùng lại
+
+  load_results(self, filepath):
+    - Đọc kết quả từ file JSON
+
+--------------------------------------------------------------------------------
+FILE: analysis/comparator.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  So sánh kết quả giữa các thuật toán, tạo bảng summary.
+
+HÀM CẦN VIẾT:
+
+  build_summary_table(results) → pandas DataFrame:
+    - Cột: Thuật toán | Điểm tốt nhất | Điểm trung bình | Độ lệch chuẩn | Thời gian | Thiếu nước?
+    - Tính mean và std từ N_RUNS lần chạy
+    - Trả về DataFrame để hiển thị trên Streamlit
+
+  rank_algorithms(results) → list:
+    - Xếp hạng thuật toán theo mean fitness (thấp = tốt)
+    - Trả về list tên thuật toán theo thứ tự tốt → kém
+
+  compute_improvement(results, baseline="GA") → dict:
+    - Tính % cải thiện so với baseline
+    - Ví dụ: Hybrid tốt hơn GA bao nhiêu %
+
+  get_best_allocation(results) → dict:
+    - Lấy phương án phân bổ nước tốt nhất trong tất cả kết quả
+    - Trả về: {algo_name, solution, fitness}
+
+--------------------------------------------------------------------------------
+FILE: analysis/statistics.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Kiểm định thống kê để chứng minh Hybrid tốt hơn có ý nghĩa thống kê.
+  Đây là điểm mà hầu hết nhóm không làm — thầy cô sẽ rất ấn tượng.
+
+HÀM CẦN VIẾT:
+
+  t_test_compare(results_a, results_b, alpha=0.05) → dict:
+    - Thực hiện Independent t-test giữa 2 thuật toán
+    - results_a, results_b: list fitness qua N_RUNS lần
+    - Trả về: {t_stat, p_value, significant, better_algo}
+    - Dùng scipy.stats.ttest_ind()
+
+  wilcoxon_test(results_a, results_b) → dict:
+    - Kiểm định Wilcoxon (không cần phân phối chuẩn)
+    - Trả về: {statistic, p_value, significant}
+
+  compute_effect_size(results_a, results_b) → float:
+    - Tính Cohen's d để đo mức độ khác biệt
+    - d < 0.2: nhỏ | 0.2-0.8: vừa | > 0.8: lớn
+
+  full_statistical_report(all_results) → str:
+    - Tạo báo cáo thống kê đầy đủ dạng text
+    - So sánh tất cả cặp thuật toán
+    - Kết luận thuật toán nào tốt nhất có ý nghĩa thống kê
+
+--------------------------------------------------------------------------------
+FILE: analysis/tuner.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Tự động tìm tham số tốt nhất bằng grid search.
+  Thay vì thử tay như trong báo cáo, tuner làm tự động.
+
+HÀM CẦN VIẾT:
+
+  grid_search_ga(param_grid, fields_data, n_runs=3) → dict:
+    - param_grid ví dụ:
+        {pop_size: [50, 100, 200], mutation_rate: [0.05, 0.1, 0.2]}
+    - Thử tất cả tổ hợp tham số
+    - Trả về: best_params, results_grid (để vẽ heatmap)
+
+  grid_search_sa(param_grid, fields_data, n_runs=3) → dict:
+    - Tương tự nhưng cho SA
+    - param_grid: {alpha: [0.90, 0.95, 0.97, 0.99], T_max: [100, 200, 500]}
+
+  get_heatmap_data(results_grid, param1, param2) → 2D numpy array:
+    - Chuẩn bị data để vẽ heatmap ảnh hưởng tham số
+
+================================================================================
+PHẦN 4: PACKAGE visualization/
+================================================================================
+
+--------------------------------------------------------------------------------
+FILE: visualization/convergence.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Vẽ đường hội tụ fitness theo thế hệ/vòng lặp của các thuật toán.
+
+HÀM CẦN VIẾT:
+
+  plot_convergence(histories, algo_names, save_path=None):
+    - histories: dict {algo_name: list fitness}
+    - Vẽ đường curve cho từng thuật toán với màu khác nhau
+    - GA: xanh | SA: cam | PSO: tím | Hybrid: đỏ
+    - Đánh dấu ranh giới GA→SA trong Hybrid bằng đường dọc nét đứt
+    - Trục X: thế hệ/bước lặp | Trục Y: fitness
+    - Trả về: matplotlib Figure
+
+  plot_convergence_with_std(histories_all_runs, algo_names):
+    - Vẽ đường trung bình + vùng ±1 std qua N_RUNS lần chạy
+    - Thể hiện độ ổn định của từng thuật toán
+
+--------------------------------------------------------------------------------
+FILE: visualization/allocation.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Vẽ biểu đồ phân bổ nước thực tế so với nhu cầu min/max.
+
+HÀM CẦN VIẾT:
+
+  plot_water_allocation(solution, demand_min, demand_max, field_names):
+    - Bar chart: mỗi thửa ruộng 1 nhóm 3 cột (min/actual/max)
+    - Màu: đỏ=min, xanh=actual, cam=max
+    - Hiển thị số liệu trên đầu mỗi cột
+    - Trả về: matplotlib Figure
+
+  plot_allocation_comparison(solutions_dict, demand_min, demand_max):
+    - So sánh phân bổ của nhiều thuật toán cùng lúc
+    - solutions_dict: {algo_name: numpy array}
+
+--------------------------------------------------------------------------------
+FILE: visualization/heatmap.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Vẽ heatmap ảnh hưởng tham số lên kết quả.
+
+HÀM CẦN VIẾT:
+
+  plot_param_heatmap(data_2d, param1_values, param2_values,
+                     param1_name, param2_name, title):
+    - data_2d: 2D numpy array fitness trung bình
+    - Dùng matplotlib imshow() với colormap 'RdYlGn_r' (đỏ=xấu, xanh=tốt)
+    - Hiển thị số liệu trong từng ô
+    - Trả về: matplotlib Figure
+
+  plot_ga_heatmap(tuner_results):
+    - Heatmap Pop_size vs Mutation_rate cho GA
+
+  plot_sa_heatmap(tuner_results):
+    - Heatmap Alpha vs T_max cho SA
+
+--------------------------------------------------------------------------------
+FILE: visualization/boxplot.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Vẽ boxplot phân phối fitness qua N_RUNS lần chạy.
+
+HÀM CẦN VIẾT:
+
+  plot_fitness_boxplot(all_fitnesses, algo_names):
+    - all_fitnesses: dict {algo_name: list fitness qua N_RUNS lần}
+    - Boxplot nằm ngang hoặc dọc
+    - Hiển thị mean bằng dấu tam giác
+    - Trả về: matplotlib Figure
+
+--------------------------------------------------------------------------------
+FILE: visualization/dashboard.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Tạo dashboard tổng hợp 4 biểu đồ trong 1 figure (2x2 grid).
+  Dùng khi muốn xuất báo cáo PDF hoặc in ra.
+
+HÀM CẦN VIẾT:
+
+  plot_full_dashboard(results, fields_data):
+    - 2x2 subplot: convergence | allocation | boxplot | heatmap
+    - Trả về: matplotlib Figure
+
+================================================================================
+PHẦN 5: PACKAGE webapp/
+================================================================================
+
+--------------------------------------------------------------------------------
+FILE: webapp/session.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Quản lý Streamlit session state — giữ dữ liệu giữa các trang.
+  Streamlit re-run toàn bộ script mỗi lần tương tác → cần lưu state.
+
+NỘI DUNG:
+
+  init_session():
+    - Khởi tạo các key trong st.session_state nếu chưa có:
+        st.session_state.fields_data    ← dữ liệu thửa ruộng hiện tại
+        st.session_state.run_results    ← kết quả sau khi chạy
+        st.session_state.selected_algos ← thuật toán người dùng chọn
+        st.session_state.W_total        ← tổng nước người dùng nhập
+        st.session_state.is_ran         ← đã chạy chưa
+
+  save_results(results):
+    - Lưu kết quả vào st.session_state.run_results
+
+  get_results():
+    - Lấy kết quả từ st.session_state.run_results
+    - Trả về None nếu chưa chạy
+
+  clear_results():
+    - Xóa kết quả để chạy lại
+
+--------------------------------------------------------------------------------
+FILE: webapp/app.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Entry point của Streamlit app. Cấu hình sidebar, navigation, layout chung.
+
+NỘI DUNG:
+
+  Cấu hình trang:
+    st.set_page_config(
+      page_title = "SmartIrrigationAI",
+      page_icon  = None,
+      layout     = "wide",
+      initial_sidebar_state = "expanded"
+    )
+
+  Sidebar:
+    - Logo/tên project
+    - Navigation: Trang chủ | Nhập dữ liệu | Chạy thuật toán | Kết quả
+    - Thông tin nhóm ở cuối sidebar
+
+  Trang chủ (khi không ở trang con):
+    - Giới thiệu project ngắn gọn
+    - Thống kê nhanh: 4 thuật toán | 10 thửa ruộng | N lần thực nghiệm
+    - Nút "Bắt đầu ngay" → chuyển sang trang nhập dữ liệu
+
+--------------------------------------------------------------------------------
+FILE: webapp/pages/01_input.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Trang 1 — Nhập và chỉnh sửa thông số bài toán.
+
+GIAO DIỆN:
+
+  Section 1: Thông số tổng quan
+    - Slider: Tổng nước W_total (200 → 500 m³, default 350)
+    - Number input: Số lần chạy mỗi thuật toán (1-20, default 10)
+
+  Section 2: Bảng thửa ruộng (có thể chỉnh sửa)
+    - st.data_editor hiển thị bảng 10 thửa ruộng
+    - Cho phép chỉnh demand_min, demand_max, price trực tiếp trên bảng
+    - Validate: demand_min < demand_max
+
+  Section 3: Chọn thuật toán
+    - Checkbox: [ ] GA  [ ] SA  [ ] PSO  [ ] Hybrid GA+SA
+    - Mặc định chọn tất cả
+
+  Section 4: Xem trước
+    - Hiển thị biểu đồ bar nhỏ: min/max từng thửa ruộng
+    - Hiển thị tổng nhu cầu min/max vs W_total
+
+  Nút "Tiếp theo →":
+    - Lưu toàn bộ vào session state
+    - Chuyển sang trang 02_run.py
+
+--------------------------------------------------------------------------------
+FILE: webapp/pages/02_run.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Trang 2 — Chạy thuật toán với progress bar real-time.
+
+GIAO DIỆN:
+
+  Section 1: Tóm tắt cấu hình
+    - Hiển thị lại thông số đã nhập ở trang 1 (readonly)
+
+  Section 2: Chạy
+    - Nút lớn "Bắt đầu tối ưu hóa"
+    - Khi bấm:
+        + progress_bar = st.progress(0)
+        + status_text  = st.empty()
+        + Vòng lặp chạy từng thuật toán, cập nhật progress
+        + Sau mỗi run: status_text.text("Đang chạy GA — Lần 3/10...")
+    - st.spinner() trong khi chạy
+
+  Section 3: Live preview (hiện ngay khi xong mỗi thuật toán)
+    - Sau khi GA xong: hiện ngay metric card "GA tốt nhất: 108.3"
+    - Sau khi SA xong: hiện thêm "SA tốt nhất: 112.7"
+    - ...
+
+  Section 4: Xem kết quả chi tiết
+    - Nút "Xem kết quả →" (chỉ hiện sau khi chạy xong)
+
+--------------------------------------------------------------------------------
+FILE: webapp/pages/03_result.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Trang 3 — Hiển thị kết quả đầy đủ, đẹp, có thể xuất báo cáo.
+
+GIAO DIỆN:
+
+  Section 1: Metric cards (4 card ngang)
+    - Card GA     : Điểm tốt nhất | Trung bình ± độ lệch chuẩn | Thời gian
+    - Card SA     : Điểm tốt nhất | Trung bình ± độ lệch chuẩn | Thời gian
+    - Card PSO    : Điểm tốt nhất | Trung bình ± độ lệch chuẩn | Thời gian
+    - Card Hybrid : Điểm tốt nhất | Trung bình ± độ lệch chuẩn | Thời gian ← highlight màu xanh
+    - Thuật toán tốt nhất được đánh dấu "Tốt nhất"
+
+  Section 2: Bảng so sánh chi tiết
+    - DataFrame hiển thị đầy đủ với st.dataframe()
+    - Download CSV bằng st.download_button()
+
+  Section 3: Biểu đồ (tabs)
+    - Tab 1: Convergence curve (convergence.py)
+    - Tab 2: Phân bổ nước tốt nhất (allocation.py)
+    - Tab 3: Boxplot phân phối (boxplot.py)
+    - Tab 4: Heatmap tham số (heatmap.py)
+
+  Section 4: Phân tích chi tiết phương án tốt nhất
+    - Bảng: Thửa | Cây | Min | Phân bổ thực tế | Max | Trạng thái
+    - Trạng thái: "Tối ưu" / "Thiếu" / "Lãng phí"
+    - Tổng kết: Tổng nước dùng | Tiết kiệm | Chi phí điện
+
+  Section 5: Kết luận thống kê
+    - Kết quả t-test: "Hybrid tốt hơn GA với p=0.002 (có ý nghĩa thống kê)"
+    - Cohen's d effect size
+    - Nút "Xuất báo cáo PDF" (tùy chọn mở rộng)
+
+--------------------------------------------------------------------------------
+FILE: webapp/components/chart_widget.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Widget tái sử dụng để nhúng matplotlib chart vào Streamlit.
+
+HÀM CẦN VIẾT:
+
+  show_chart(fig, caption=None, use_container_width=True):
+    - Bọc st.pyplot(fig) với caption và container width chuẩn
+    - Thêm nút download PNG
+
+  show_plotly_chart(fig):
+    - Nếu dùng Plotly thay Matplotlib (interactive hơn)
+    - st.plotly_chart(fig, use_container_width=True)
+
+--------------------------------------------------------------------------------
+FILE: webapp/components/result_table.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Widget hiển thị bảng kết quả phân bổ nước đẹp với màu sắc.
+
+HÀM CẦN VIẾT:
+
+  show_allocation_table(solution, fields_data):
+    - Tạo DataFrame từ solution
+    - Dùng st.dataframe() với column_config để format đẹp
+    - Tô màu cột "Trạng thái": xanh=tốt, đỏ=thiếu, vàng=lãng phí
+
+  show_summary_metrics(solution, fields_data, W_total):
+    - st.metric() hiển thị: Tổng nước dùng | Tiết kiệm | Chi phí
+
+--------------------------------------------------------------------------------
+FILE: webapp/components/metric_card.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Widget hiển thị card kết quả từng thuật toán.
+
+HÀM CẦN VIẾT:
+
+  show_algo_card(algo_name, best_fitness, mean_fitness, std, runtime,
+                 is_best=False):
+    - Dùng st.metric() hoặc HTML custom
+    - is_best=True → thêm viền xanh và badge "Tốt nhất"
+
+================================================================================
+PHẦN 6: FILE GỐC (ROOT LEVEL)
+================================================================================
+
+--------------------------------------------------------------------------------
+FILE: main.py
+--------------------------------------------------------------------------------
+MỤC ĐÍCH:
+  Chạy từ terminal — so sánh tất cả thuật toán và in kết quả ra console.
+  Không cần Streamlit, dùng để test nhanh hoặc chạy batch.
+
+NỘI DUNG:
+
+  if __name__ == "__main__":
+    1. Load dữ liệu từ core/data.py
+    2. Khởi tạo ExperimentRunner với 4 thuật toán
+    3. Chạy run_all() với callback in progress
+    4. In bảng so sánh ra console (dùng tabulate hoặc pandas)
+    5. Gọi plot_full_dashboard() → lưu file PNG
+    6. In kết luận thống kê
+
+  Chạy lệnh: python main.py
+  Chạy demo : streamlit run webapp/app.py
+
+--------------------------------------------------------------------------------
+FILE: requirements.txt
+--------------------------------------------------------------------------------
+numpy>=1.24.0
+matplotlib>=3.7.0
+streamlit>=1.28.0
+scipy>=1.11.0
+pandas>=2.0.0
+tabulate>=0.9.0
+
+--------------------------------------------------------------------------------
+FILE: README.md
+--------------------------------------------------------------------------------
+NỘI DUNG:
+  - Giới thiệu project
+  - Cài đặt môi trường (pip install -r requirements.txt)
+  - Cách chạy terminal: python main.py
+  - Cách chạy web app: streamlit run webapp/app.py
+  - Mô tả kiến trúc (tóm tắt 5 package)
+  - Kết quả thực nghiệm (bảng so sánh)
+  - Thành viên nhóm
+
+================================================================================
+PHẦN 7: TESTS/
+================================================================================
+
+--------------------------------------------------------------------------------
+FILE: tests/test_fitness.py
+--------------------------------------------------------------------------------
+CÁC TEST CẦN VIẾT:
+
+  test_fitness_all_at_min():
+    - Khi x = demand_min → penalty_thieu = 0, chỉ có cost
+    - Kiểm tra giá trị fitness đúng
+
+  test_fitness_shortage():
+    - Khi x[0] < demand_min[0] → penalty_thieu > 0
+    - Kiểm tra penalty tính bình phương đúng
+
+  test_fitness_waste():
+    - Khi x[0] > demand_max[0] → penalty_lang_phi > 0
+
+  test_fitness_breakdown_sum():
+    - Tổng các thành phần = fitness tổng
+
+--------------------------------------------------------------------------------
+FILE: tests/test_operators.py
+--------------------------------------------------------------------------------
+CÁC TEST CẦN VIẾT:
+
+  test_gaussian_mutation_bounds():
+    - Sau mutation, x phải vẫn nằm trong [demand_min, demand_max]
+    - Test 1000 lần để đảm bảo không có trường hợp vi phạm
+
+  test_blx_crossover_range():
+    - Con sinh ra phải nằm trong vùng hợp lý
+
+  test_clone_gene_correctness():
+    - Phát hiện bug "b2=brain.b1" của Flappy Bird
+    - Đảm bảo clone() copy đúng tất cả gene
+
+  test_acceptance_probability():
+    - delta < 0 → probability = 1.0
+    - delta > 0, T rất cao → probability gần 1.0
+    - delta > 0, T rất thấp → probability gần 0.0
+
+--------------------------------------------------------------------------------
+FILE: tests/test_constraints.py
+--------------------------------------------------------------------------------
+CÁC TEST CẦN VIẾT:
+
+  test_clip_to_bounds():
+    - x < demand_min → clip về demand_min
+    - x > demand_max → clip về demand_max
+
+  test_repair_solution_budget():
+    - Sau repair, sum(x) <= W_total
+    - Sau repair, x vẫn trong bounds
+
+================================================================================
+PHẦN 8: THỨ TỰ LÀM VÀ GHI CHÚ QUAN TRỌNG
+================================================================================
+
+THỨ TỰ LÀM ĐỀ NGHỊ:
+  Tuần 1: core/ (data, config, fitness, constraints) + tests/test_fitness.py
+  Tuần 2: algorithms/ (base, operators, ga, sa) + tests/test_operators.py
+  Tuần 3: algorithms/ (pso, hybrid) + analysis/ (runner, comparator)
+  Tuần 4: analysis/ (statistics, tuner) + visualization/ (4 file)
+  Tuần 5: webapp/ (session, components, pages, app)
+  Tuần 6: main.py + README.md + chỉnh sửa hoàn thiện
+
+NHỮNG ĐIỂM KHÁC BIỆT VỚI NHÓM KHÁC (điểm nhấn khi bảo vệ):
+  1. PSO — thuật toán thứ 4 ngoài báo cáo gốc
+  2. Weighted crossover theo fitness — khắc phục bug Flappy Bird
+  3. T-test thống kê — chứng minh Hybrid tốt hơn có ý nghĩa
+  4. repair_solution() — sửa nghiệm vi phạm thay vì chỉ dùng penalty
+  5. Streamlit multipage app — giao diện chuyên nghiệp
+  6. Tuner tự động grid search tham số — không cần thử tay
+
+BUG CẦN TRÁNH (học từ Flappy Bird):
+  1. Trong operators.py: đảm bảo clone copy đúng TOÀN BỘ gene
+     → Viết test_clone_gene_correctness() ngay sau khi code
+  2. Trong weighted_crossover: đừng tính ratio rồi bỏ không dùng
+     → Kiểm tra lại công thức trước khi commit
+  3. Trong gaussian_mutation: luôn clip sau mutation
+     → Không skip bước này dù có vẻ không cần thiết
+
+================================================================================
+   Tài liệu thiết kế này phục vụ cho việc cài đặt chi tiết từng file.
+   Mỗi hàm mô tả ở đây cần được implement đầy đủ với docstring và test.
+   Liên hệ thầy/cô nếu cần điều chỉnh scope hoặc thêm tính năng.
+================================================================================
