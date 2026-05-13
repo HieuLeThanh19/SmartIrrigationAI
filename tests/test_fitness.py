@@ -36,7 +36,7 @@ def test_fitness_waste():
 def test_fitness_breakdown_sum():
     x = DM + (DX - DM) * 0.5  # midpoint
     bd = fitness_breakdown(x, DM, DX, PR)
-    expected = bd["shortage_penalty"] + bd["waste_penalty"] + bd["cost"]
+    expected = bd["shortage_penalty"] + bd["waste_penalty"] + bd["underuse_penalty"] + bd["cost"]
     assert bd["total"] == pytest.approx(expected)
 
 

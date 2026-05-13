@@ -2,7 +2,7 @@
 
 # ── Dữ liệu bài toán ──────────────────────────────────
 N_FIELDS = 10
-W_TOTAL  = 350
+W_TOTAL  = 260
 
 # ── Tham số GA ────────────────────────────────────────
 GA_POP_SIZE        = 100
@@ -37,6 +37,7 @@ HYBRID_SA_T_MAX = 50.0
 ALPHA_PENALTY = 10
 BETA_WASTE    = 3
 GAMMA_COST    = 1
+DELTA_UNDERUSE = 8
 
 # ── Thực nghiệm ───────────────────────────────────────
-N_RUNS = 60
+N_RUNS = 30

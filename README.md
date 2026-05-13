@@ -37,8 +37,8 @@ Khi chạy terminal, chương trình so sánh GA, SA, PSO và Hybrid theo cấu 
 Web app gồm:
 
 - `webapp/app.py`: trang chủ.
-- `webapp/pages/01_input.py`: nhập tổng lượng nước, dữ liệu thửa ruộng và thuật toán cần chạy.
-- `webapp/pages/02_run.py`: demo thuật toán từng bước, có giải thích quá trình tối ưu.
+- `webapp/pages/01_input.py`: chọn kịch bản, chỉnh dữ liệu thửa ruộng, ngân sách nước và thuật toán cần demo.
+- `webapp/pages/02_run.py`: demo 30 bước cho từng thuật toán, có giải thích riêng cho GA, SA, PSO và Hybrid.
 - `webapp/pages/03_result.py`: bảng so sánh, biểu đồ hội tụ, phân bổ nước và thống kê.
 
 Streamlit navigation mặc định đã được tắt trong `.streamlit/config.toml`; app dùng menu tiếng Việt riêng ở sidebar.
@@ -63,8 +63,8 @@ python -m pytest tests/ -v
 
 ## Ghi Chú Cấu Hình
 
-- Tổng lượng nước mặc định: `core/config.py` -> `W_TOTAL`.
-- Số lần chạy thực nghiệm mặc định: `core/config.py` -> `N_RUNS`.
-- Các trọng số fitness nằm trong `ALPHA_PENALTY`, `BETA_WASTE`, `GAMMA_COST`.
+- Tổng lượng nước mặc định: `core/config.py` -> `W_TOTAL` = 260.
+- Số bước/lần chạy mặc định: `core/config.py` -> `N_RUNS` = 30; web demo cũng cố định 30 bước.
+- Các trọng số fitness nằm trong `ALPHA_PENALTY`, `BETA_WASTE`, `DELTA_UNDERUSE`, `GAMMA_COST`.
 
 Môn: Trí Tuệ Nhân Tạo.

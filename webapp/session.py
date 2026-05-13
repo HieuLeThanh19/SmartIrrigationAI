@@ -18,9 +18,9 @@ def init_session():
         if k not in st.session_state:
             st.session_state[k] = v
 
-    if st.session_state.get("n_runs_default_version") != 2:
+    if st.session_state.get("n_runs_default_version") != 3:
         st.session_state["n_runs"] = cfg.N_RUNS
-        st.session_state["n_runs_default_version"] = 2
+        st.session_state["n_runs_default_version"] = 3
 
     if st.session_state["fields_data"] is None:
         st.session_state["fields_data"] = {
@@ -31,6 +31,10 @@ def init_session():
             "field_names": data_module.get_field_names(),
             "crop_names":  data_module.get_crop_names(),
         }
+        st.session_state["fields_data_default_version"] = 2
+    elif st.session_state.get("fields_data_default_version") != 2:
+        st.session_state["fields_data"]["W_total"] = cfg.W_TOTAL
+        st.session_state["fields_data_default_version"] = 2
     sync_budget_state()
 
 
