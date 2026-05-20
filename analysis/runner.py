@@ -1,4 +1,3 @@
-# analysis/runner.py — Chạy thực nghiệm tự động
 import json
 import time
 from pathlib import Path

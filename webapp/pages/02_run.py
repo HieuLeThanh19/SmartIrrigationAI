@@ -14,6 +14,7 @@ from core import config as cfg
 from core.constraints import clip_to_bounds, repair_solution
 from core.fitness import fitness as calculate_fitness
 from core.fitness import fitness_breakdown
+from webapp.ai_explainer import render_run_ai_section
 from webapp.components.sidebar_nav import show_sidebar_nav
 import webapp.session as session_state
 
@@ -1169,9 +1170,8 @@ if first_sol is not None and current_sol is not None:
 saved = st.session_state.get("run_results", {}) or {}
 if saved:
     render_finished_algorithms(saved)
+    render_run_ai_section(saved, st.session_state.get("prepared_algo"))
 
-# Auto mode phải giống 100% nút "Chạy 1 bước":
-# mỗi lần rerun chỉ gọi apply_one_step đúng 1 lần rồi chờ 3s mới rerun tiếp.
 if st.session_state["demo_running"] and st.session_state["demo_step"] < st.session_state["demo_steps"]:
     time.sleep(AUTO_DELAY_SECONDS)
     st.rerun()

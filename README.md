@@ -6,7 +6,7 @@ Genetic Algorithm (GA), Simulated Annealing (SA), Particle Swarm Optimization (P
 Ứng dụng có 2 cách chạy:
 
 - Web app Streamlit để nhập dữ liệu, chạy demo từng bước và xem kết quả.
-- Terminal runner để chạy thực nghiệm đầy đủ và xuất biểu đồ tổng hợp.
+- Terminal demo để chọn thuật toán, chạy từng bước giống Streamlit và vẫn có chế độ so sánh đầy đủ.
 
 ## Cài Đặt
 
@@ -24,13 +24,19 @@ Chạy giao diện web (chính):
 python -m streamlit run webapp/app.py
 ```
 
-Chạy thực nghiệm từ terminal:
+Chạy demo từ terminal:
 
 ```bash
 python main.py
 ```
 
-Khi chạy terminal, chương trình so sánh GA, SA, PSO và Hybrid theo cấu hình trong `core/config.py`, sau đó tạo file `dashboard.png`.
+Terminal có menu tương tác:
+
+- `Demo tương tác 30 bước`: chọn GA, SA, PSO hoặc Hybrid; nhấn Enter để chạy từng bước, xem bảng 10 thửa ruộng, điểm tối ưu, lượng nước thiếu/dư, chi phí và giải thích quyết định của thuật toán.
+- `So sánh đầy đủ và xuất dashboard.png`: chạy GA, SA, PSO và Hybrid theo cấu hình trong `core/config.py`, sau đó tạo file `dashboard.png`.
+- `Xem dữ liệu 10 thửa ruộng`: kiểm tra nhanh min/max, cây trồng, giá bơm và ngân sách nước đang dùng.
+
+Nếu cần giao diện đầy đủ hơn, chạy Streamlit bằng lệnh ở trên.
 
 ## Giao Diện Web
 

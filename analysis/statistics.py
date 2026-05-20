@@ -1,4 +1,3 @@
-# analysis/statistics.py — Kiểm định thống kê
 import numpy as np
 from scipy import stats
 
@@ -72,7 +71,6 @@ def full_statistical_report(all_results: dict) -> str:
                 "",
             ]
 
-    # Xếp hạng cuối cùng
     means = {a: float(np.mean([r["best_fitness"] for r in runs]))
              for a, runs in all_results.items()}
     ranked = sorted(means, key=means.get)

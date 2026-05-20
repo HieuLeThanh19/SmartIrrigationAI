@@ -1,5 +1,3 @@
-# algorithms/base.py — Lớp cơ sở cho tất cả thuật toán
-
 import numpy as np
 from abc import ABC, abstractmethod
 from core.constraints import repair_solution
@@ -17,7 +15,7 @@ class BaseAlgorithm(ABC):
 
         self.best_solution = None
         self.best_fitness  = float("inf")
-        self.history       = []  # fitness tốt nhất theo từng bước
+        self.history       = []
 
     def fitness(self, x: np.ndarray) -> float:
         return calculate_fitness(x, self.demand_min, self.demand_max, self.prices, self.W_total)

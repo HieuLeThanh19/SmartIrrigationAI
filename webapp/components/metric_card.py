@@ -1,4 +1,3 @@
-# webapp/components/metric_card.py — Widget hiển thị kết quả từng thuật toán
 import streamlit as st
 
 

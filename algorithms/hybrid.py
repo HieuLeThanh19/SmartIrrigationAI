@@ -1,5 +1,3 @@
-# algorithms/hybrid.py — Hybrid GA + SA
-
 import numpy as np
 import math
 from core.constraints import repair_solution, clip_to_bounds
@@ -11,7 +9,6 @@ class HybridGASA(BaseAlgorithm):
 
     def __init__(self, fields_data: dict, config):
         super().__init__(fields_data, config)
-        # GA params
         self.pop_size  = config.GA_POP_SIZE
         self.ga_gen    = config.HYBRID_GA_GEN
         self.cx_rate   = config.GA_CROSSOVER_RATE
@@ -20,14 +17,12 @@ class HybridGASA(BaseAlgorithm):
         self.tourn_k   = config.GA_TOURNAMENT_K
         self.elite_n   = max(1, int(config.GA_ELITE_RATIO * config.GA_POP_SIZE))
         self.blx_alpha = config.GA_BLX_ALPHA
-        # SA params
         self.T_max     = config.HYBRID_SA_T_MAX
         self.T_min     = config.SA_T_MIN
         self.sa_alpha  = config.SA_ALPHA
         self.iter_per_T = config.SA_ITER_PER_T
         self.sa_sigma  = config.SA_NEIGHBOR_SIGMA
 
-    # ── GA helpers ──────────────────────────────────────
     def _tournament(self, pop, fits):
         idx  = np.random.choice(len(pop), self.tourn_k, replace=False)
         best = idx[np.argmin([fits[i] for i in idx])]
@@ -74,7 +69,6 @@ class HybridGASA(BaseAlgorithm):
         best_idx = int(np.argmin(fits))
         return pop[best_idx].copy(), fits[best_idx]
 
-    # ── SA refinement ───────────────────────────────────
     def _run_sa(self, start):
         current   = start.copy()
         f_current = self.fitness(current)
@@ -100,7 +94,6 @@ class HybridGASA(BaseAlgorithm):
             self.history.append(self.best_fitness)
         return current
 
-    # ── Main ────────────────────────────────────────────
     def solve(self) -> np.ndarray:
         ga_best, ga_fit    = self._run_ga()
         self.best_solution = ga_best.copy()

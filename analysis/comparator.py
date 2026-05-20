@@ -1,4 +1,3 @@
-# analysis/comparator.py — So sánh kết quả thuật toán
 import numpy as np
 import pandas as pd
 

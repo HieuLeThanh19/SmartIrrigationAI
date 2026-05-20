@@ -1,5 +1,3 @@
-# analysis/tuner.py — Grid search tham số
-
 import numpy as np
 import itertools
 from core import config as base_cfg

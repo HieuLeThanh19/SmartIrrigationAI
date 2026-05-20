@@ -1,5 +1,3 @@
-# core/constraints.py — Kiểm tra & sửa ràng buộc
-
 import numpy as np
 
 

@@ -1,4 +1,3 @@
-# webapp/components/result_table.py — Bảng kết quả phân bổ nước
 import streamlit as st
 import numpy as np
 import pandas as pd

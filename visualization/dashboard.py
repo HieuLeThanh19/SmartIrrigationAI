@@ -1,5 +1,3 @@
-# visualization/dashboard.py
-
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -15,13 +13,11 @@ def plot_full_dashboard(results: dict, fields_data: dict, save_path: str = None)
     demand_max = fields_data["demand_max"]
     field_names = fields_data.get("field_names", [f"T{i+1}" for i in range(len(demand_min))])
 
-    # Lịch sử tốt nhất
     histories = {}
     for algo, runs in results.items():
         best_run = min(runs, key=lambda r: r["best_fitness"])
         histories[algo] = best_run["history"]
 
-    # Nghiệm tốt nhất của thuật toán tốt nhất
     best_fitness = float("inf")
     best_sol     = None
     for algo, runs in results.items():
@@ -36,7 +32,6 @@ def plot_full_dashboard(results: dict, fields_data: dict, save_path: str = None)
     fig = plt.figure(figsize=(16, 10))
     fig.suptitle("SmartIrrigationAI — Bảng kết quả", fontsize=16, fontweight="bold")
 
-    # Biểu đồ 1: Hội tụ
     ax1 = fig.add_subplot(2, 2, 1)
     for algo in algo_names:
         ax1.plot(histories[algo], label=algo, linewidth=1.5)
@@ -46,7 +41,6 @@ def plot_full_dashboard(results: dict, fields_data: dict, save_path: str = None)
     ax1.legend(fontsize=8)
     ax1.grid(alpha=0.3)
 
-    # Biểu đồ 2: Phân bổ nước
     ax2 = fig.add_subplot(2, 2, 2)
     x = np.arange(len(demand_min))
     ax2.bar(x - 0.25, demand_min, 0.25, label="Min", color="#EF5350", alpha=0.8)
@@ -58,7 +52,6 @@ def plot_full_dashboard(results: dict, fields_data: dict, save_path: str = None)
     ax2.legend(fontsize=8)
     ax2.grid(axis="y", alpha=0.3)
 
-    # Biểu đồ 3: Phân phối điểm tối ưu
     ax3 = fig.add_subplot(2, 2, 3)
     data   = [all_fitnesses[a] for a in algo_names]
     bp = ax3.boxplot(data, patch_artist=True)
@@ -67,7 +60,6 @@ def plot_full_dashboard(results: dict, fields_data: dict, save_path: str = None)
     ax3.set_ylabel("Điểm tối ưu")
     ax3.grid(axis="y", alpha=0.3)
 
-    # Biểu đồ 4: So sánh thời gian chạy
     ax4 = fig.add_subplot(2, 2, 4)
     runtimes = [np.mean([r["runtime"] for r in results[a]]) for a in algo_names]
     bars = ax4.bar(algo_names, runtimes, color=["#2196F3","#FF9800","#9C27B0","#F44336"][:len(algo_names)])

@@ -25,8 +25,6 @@ def test_blx_crossover_range():
     p2 = DM + (DX - DM) * 0.7
     for _ in range(100):
         c1, c2 = blx_alpha_crossover(p1, p2, alpha=0.5)
-        # Con có thể vượt range một chút do BLX-α — đây là bình thường
-        # nhưng kiểm tra kiểu dữ liệu
         assert c1.shape == p1.shape
         assert c2.shape == p2.shape
 

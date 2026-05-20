@@ -1,5 +1,3 @@
-# webapp/session.py — Quản lý Streamlit session state
-
 import streamlit as st
 from core import data as data_module
 from core import config as cfg

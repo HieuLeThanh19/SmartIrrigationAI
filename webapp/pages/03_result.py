@@ -10,6 +10,7 @@ from webapp.components.sidebar_nav import show_sidebar_nav
 from webapp.components.metric_card import show_algo_card
 from webapp.components.result_table import show_allocation_table, show_summary_metrics
 from webapp.components.chart_widget import show_chart
+from webapp.ai_explainer import render_comparison_ai_section
 from analysis.comparator import build_summary_table, rank_algorithms, compute_improvement, get_best_allocation
 from visualization.convergence import plot_convergence
 from visualization.allocation  import plot_water_allocation
@@ -120,7 +121,6 @@ if results is None:
 fields_data = st.session_state["fields_data"]
 algo_names  = list(results.keys())
 
-# ── Section 1: Metric cards ───────────────────────────────────────────────────
 st.header("1. Tổng kết từng thuật toán")
 ranked      = rank_algorithms(results)
 best_algo   = ranked[0]
@@ -139,7 +139,6 @@ for col, algo in zip(cols, algo_names):
             is_best      = (algo == best_algo),
         )
 
-# ── Section 2: Bảng so sánh ──────────────────────────────────────────────────
 st.header("2. Bảng so sánh chi tiết")
 summary_df = build_summary_table(results)
 st.dataframe(summary_df, use_container_width=True, hide_index=True)
@@ -151,7 +150,6 @@ improvements = compute_improvement(results)
 st.caption("% cải thiện so với GA: " +
            " | ".join(f"{k}: {v:+.1f}%" for k, v in improvements.items() if k != "GA"))
 
-# ── Section 3: Biểu đồ ───────────────────────────────────────────────────────
 st.header("3. Biểu đồ phân tích")
 tab1, tab2, tab3 = st.tabs(["Hội tụ", "Phân bổ nước", "Boxplot"])
 
@@ -174,14 +172,12 @@ with tab3:
     fig3 = plot_fitness_boxplot(all_fits, algo_names)
     show_chart(fig3, caption="Phân phối fitness qua các lần chạy")
 
-# ── Section 4: Chi tiết phương án tốt nhất ───────────────────────────────────
 st.header("4. Phân tích phương án tốt nhất")
 best_alloc = get_best_allocation(results)
 st.markdown(f"**Thuật toán:** {best_alloc['algo_name']} | **Điểm tối ưu:** {best_alloc['fitness']:.4f}")
 show_allocation_table(best_alloc["solution"], fields_data)
 show_summary_metrics(best_alloc["solution"], fields_data, fields_data["W_total"])
 
-# ── Section 5: Kết luận dễ hiểu ───────────────────────────────────────────────
 st.header("5. Kết luận xếp hạng")
 rank_text_df = build_rank_explanations(results, ranked, fields_data)
 for _, row in rank_text_df.iterrows():
@@ -192,3 +188,5 @@ for _, row in rank_text_df.iterrows():
 
 if len(algo_names) == 1:
     st.caption("Hiện mới có một thuật toán được chạy, nên phần xếp hạng chỉ giải thích riêng thuật toán đó.")
+
+render_comparison_ai_section(results, ranked)

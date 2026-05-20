@@ -1,4 +1,3 @@
-# visualization/convergence.py — Đường hội tụ fitness
 import matplotlib.pyplot as plt
 import numpy as np
 

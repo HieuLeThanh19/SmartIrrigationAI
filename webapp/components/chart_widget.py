@@ -1,4 +1,3 @@
-# webapp/components/chart_widget.py — Widget nhúng matplotlib vào Streamlit
 import streamlit as st
 import io
 

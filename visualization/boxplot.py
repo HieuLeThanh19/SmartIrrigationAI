@@ -1,4 +1,3 @@
-# visualization/boxplot.py — Boxplot phân phối fitness
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -15,7 +14,6 @@ def plot_fitness_boxplot(all_fitnesses: dict, algo_names: list, save_path: str =
     for patch, color in zip(bp["boxes"], colors[:len(algo_names)]):
         patch.set_facecolor(color); patch.set_alpha(0.75)
 
-    # Đánh dấu mean
     for i, d in enumerate(data):
         if d:
             ax.plot(i + 1, np.mean(d), marker="^", color="yellow",

@@ -1,4 +1,3 @@
-# core/fitness.py — Hàm tính fitness trung tâm của project
 import numpy as np
 from core import config as cfg
 

@@ -1,5 +1,3 @@
-# algorithms/pso.py — Particle Swarm Optimization
-
 import numpy as np
 from core.constraints import repair_solution, clip_to_bounds
 from algorithms.base import BaseAlgorithm

@@ -1,4 +1,3 @@
-# visualization/allocation.py — Biểu đồ phân bổ nước
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -16,7 +15,6 @@ def plot_water_allocation(solution: np.ndarray, demand_min: np.ndarray,
     bars_act = ax.bar(x,           solution,   width, label="Phân bổ AI",  color="#42A5F5", alpha=0.9)
     bars_max = ax.bar(x + width,   demand_max, width, label="Max",         color="#FFA726", alpha=0.8)
 
-    # Số liệu trên đầu cột thực tế
     for bar in bars_act:
         h = bar.get_height()
         ax.text(bar.get_x() + bar.get_width() / 2, h + 0.3,
@@ -47,7 +45,6 @@ def plot_allocation_comparison(solutions_dict: dict, demand_min: np.ndarray,
         offset = (idx - n_algos / 2 + 0.5) * width
         ax.bar(x + offset, sol, width, label=algo, color=colors[idx % len(colors)], alpha=0.8)
 
-    # Min/Max reference lines
     ax.step(np.append(x - 0.4, x[-1] + 0.4), np.append(demand_min, demand_min[-1]),
             where="mid", color="red", linestyle="--", linewidth=1, label="Min")
     ax.step(np.append(x - 0.4, x[-1] + 0.4), np.append(demand_max, demand_max[-1]),

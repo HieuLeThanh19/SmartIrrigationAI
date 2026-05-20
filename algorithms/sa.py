@@ -1,5 +1,3 @@
-# algorithms/sa.py — Simulated Annealing
-
 import numpy as np
 import math
 from core.constraints import repair_solution, clip_to_bounds
