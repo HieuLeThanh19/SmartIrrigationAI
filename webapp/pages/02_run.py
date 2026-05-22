@@ -1047,7 +1047,7 @@ with st.sidebar:
             st.warning("Bạn hãy chạy ít nhất 1 bước trước khi xem kết quả.")
 
 algo = st.session_state["prepared_algo"]
-st.title(f"Demo thuật toán: {ALGO_LABELS.get(algo, algo)}")
+st.title(f"Demo từng thuật toán: {ALGO_LABELS.get(algo, algo)}")
 
 if one_step and st.session_state["demo_step"] < st.session_state["demo_steps"]:
     apply_one_step(algo)
@@ -1171,6 +1171,13 @@ saved = st.session_state.get("run_results", {}) or {}
 if saved:
     render_finished_algorithms(saved)
     render_run_ai_section(saved, st.session_state.get("prepared_algo"))
+
+st.divider()
+if st.button("Chuyển qua trang kết quả", type="primary", use_container_width=True, key="bottom_result_page"):
+    if persist_finished_result(st.session_state["prepared_algo"]):
+        st.switch_page("pages/03_result.py")
+    else:
+        st.warning("Bạn hãy chạy ít nhất 1 bước trước khi xem kết quả.")
 
 if st.session_state["demo_running"] and st.session_state["demo_step"] < st.session_state["demo_steps"]:
     time.sleep(AUTO_DELAY_SECONDS)

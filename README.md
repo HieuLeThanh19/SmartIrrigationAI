@@ -38,6 +38,22 @@ Terminal có menu tương tác:
 
 Nếu cần giao diện đầy đủ hơn, chạy Streamlit bằng lệnh ở trên.
 
+## Cấu Hình Gemini Cho Phần AI Giải Thích
+
+Phần AI giải thích có thể dùng Gemini để trả lời thống nhất và tự nhiên hơn. Tạo file `.streamlit/secrets.toml` theo mẫu:
+
+```toml
+GEMINI_API_KEY = "your-gemini-api-key"
+```
+
+Hoặc đặt biến môi trường:
+
+```bash
+set GEMINI_API_KEY=your-gemini-api-key
+```
+
+Nếu không cấu hình key, ứng dụng vẫn dùng bộ giải thích nội bộ dựa trên số liệu đã chạy.
+
 ## Giao Diện Web
 
 Web app gồm:
@@ -45,6 +61,7 @@ Web app gồm:
 - `webapp/app.py`: trang chủ.
 - `webapp/pages/01_input.py`: chọn kịch bản, chỉnh dữ liệu thửa ruộng, ngân sách nước và thuật toán cần demo.
 - `webapp/pages/02_run.py`: demo 30 bước cho từng thuật toán, có giải thích riêng cho GA, SA, PSO và Hybrid.
+- `webapp/pages/03_all_algorithms.py`: demo đồng thời 4 thuật toán với dashboard, nhật ký và biểu đồ so sánh live.
 - `webapp/pages/03_result.py`: bảng so sánh, biểu đồ hội tụ, phân bổ nước và thống kê.
 
 Streamlit navigation mặc định đã được tắt trong `.streamlit/config.toml`; app dùng menu tiếng Việt riêng ở sidebar.

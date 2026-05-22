@@ -1,17 +1,26 @@
 """AI-style explanations for irrigation optimization results.
 
-This module is intentionally offline: it explains and answers from the real
-numbers already produced by the app, so the demo works without an API key.
+The app can use Gemini when a GEMINI_API_KEY is configured. If the key is
+missing or the API is unavailable, it falls back to deterministic local
+explanations so the demo still works offline.
 """
 from __future__ import annotations
 
 import hashlib
+import json
+import os
+import urllib.error
+import urllib.request
 from dataclasses import dataclass
 
 import numpy as np
 import streamlit as st
 
 from core.fitness import fitness_breakdown
+
+GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_ENDPOINT = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+GEMINI_TIMEOUT_SECONDS = 12
 
 
 @dataclass
@@ -139,6 +148,119 @@ def _dominant_penalty(insight: AlgoInsight) -> str:
         "chi phí bơm": insight.cost_score,
     }
     return max(parts, key=parts.get)
+
+
+def _gemini_api_key() -> str | None:
+    key = os.environ.get("GEMINI_API_KEY")
+    if key:
+        return key.strip()
+    try:
+        key = st.secrets.get("GEMINI_API_KEY")
+    except Exception:
+        key = None
+    return str(key).strip() if key else None
+
+
+def _insight_payload(insights: list[AlgoInsight]) -> list[dict]:
+    payload = []
+    for item in insights:
+        payload.append(
+            {
+                "name": item.name,
+                "fitness": round(item.fitness, 4),
+                "runtime_seconds": round(item.runtime, 4),
+                "total_water_m3": round(item.total_water, 2),
+                "cost": round(item.cost, 2),
+                "avg_cost_per_m3": round(item.avg_cost, 3),
+                "shortage_m3": round(item.shortage, 2),
+                "surplus_m3": round(item.surplus, 2),
+                "under_target_m3": round(item.under_target, 2),
+                "issue_total_m3": round(item.issue_total, 2),
+                "water_saved_m3": None if item.water_saved is None else round(item.water_saved, 2),
+                "cost_saved": None if item.cost_saved is None else round(item.cost_saved, 2),
+                "score_parts": {
+                    "shortage_penalty": round(item.shortage_penalty, 3),
+                    "surplus_penalty": round(item.surplus_penalty, 3),
+                    "underuse_penalty": round(item.underuse_penalty, 3),
+                    "cost_score": round(item.cost_score, 3),
+                    "total": round(item.score, 4),
+                },
+                "dominant_penalty": _dominant_penalty(item),
+            }
+        )
+    return payload
+
+
+def _gemini_prompt(task: str, insights: list[AlgoInsight], question: str | None = None) -> str:
+    data = json.dumps(_insight_payload(insights), ensure_ascii=False, indent=2)
+    question_block = f"\nCâu hỏi người dùng: {question.strip()}" if question else ""
+    return f"""
+Bạn là trợ lý AI của hệ thống SmartIrrigationAI. Hãy giải thích bằng tiếng Việt tự nhiên, nhất quán, ngắn gọn và bám sát số liệu.
+
+Quy tắc bắt buộc:
+- Không bịa số ngoài dữ liệu JSON.
+- Fitness càng thấp càng tốt.
+- Luôn phân biệt 4 nhóm: lượng nước, chi phí, thời gian, điểm tối ưu/fitness.
+- Khi so sánh thuật toán, nói rõ thuật toán tốt nhất theo fitness và các đánh đổi nếu có.
+- Giọng văn thống nhất: chuyên nghiệp, dễ hiểu cho người dùng nông nghiệp/kỹ thuật.
+- Dùng Markdown, tối đa 5 đoạn ngắn, không lan man.
+- Nếu trả lời câu hỏi, trả lời trực tiếp trước rồi giải thích lý do bằng số liệu.
+
+Nhiệm vụ: {task}
+{question_block}
+
+Dữ liệu thuật toán:
+```json
+{data}
+```
+""".strip()
+
+
+def _call_gemini(prompt: str) -> str | None:
+    api_key = _gemini_api_key()
+    if not api_key:
+        return None
+
+    body = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.25,
+            "topP": 0.9,
+            "maxOutputTokens": 900,
+        },
+    }
+    data = json.dumps(body).encode("utf-8")
+    request = urllib.request.Request(
+        GEMINI_ENDPOINT,
+        data=data,
+        headers={
+            "Content-Type": "application/json",
+            "x-goog-api-key": api_key,
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=GEMINI_TIMEOUT_SECONDS) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, OSError) as exc:
+        st.session_state["gemini_last_error"] = str(exc)
+        return None
+
+    candidates = payload.get("candidates") or []
+    if not candidates:
+        return None
+    parts = candidates[0].get("content", {}).get("parts", [])
+    text = "".join(part.get("text", "") for part in parts).strip()
+    return text or None
+
+
+def _gemini_or_fallback(task: str, insights: list[AlgoInsight], fallback: str, question: str | None = None) -> str:
+    prompt = _gemini_prompt(task, insights, question)
+    answer = _call_gemini(prompt)
+    if answer:
+        st.session_state["gemini_last_error"] = None
+        return answer
+    return fallback
 
 
 def _run_explanation(insight: AlgoInsight) -> str:
@@ -299,7 +421,13 @@ def _chat_box(key: str, insights: list[AlgoInsight], placeholder: str) -> None:
 
     if submitted and user_question.strip():
         st.session_state[history_key].append({"role": "user", "content": user_question.strip()})
-        answer = _answer_from_context(user_question.strip(), insights)
+        fallback = _answer_from_context(user_question.strip(), insights)
+        answer = _gemini_or_fallback(
+            task="Trả lời câu hỏi follow-up của người dùng về kết quả thuật toán.",
+            insights=insights,
+            fallback=fallback,
+            question=user_question.strip(),
+        )
         st.session_state[history_key].append({"role": "assistant", "content": answer})
         st.rerun()
 
@@ -330,7 +458,14 @@ def render_run_ai_section(results: dict, current_algo: str | None = None) -> Non
     st.caption("Bấm mở khi bạn muốn xem giải thích chi tiết từ số liệu thuật toán vừa chạy.")
     section_key = f"run_{algo}_{_stable_hash(insights[0])}"
     if _toggle_explanation(section_key, "Xem giải thích kết quả vừa chạy"):
-        st.markdown(_run_explanation(insights[0]))
+        st.caption("Gemini sẽ được dùng nếu đã cấu hình GEMINI_API_KEY; nếu không, app dùng bộ giải thích nội bộ.")
+        st.markdown(
+            _gemini_or_fallback(
+                task=f"Giải thích kết quả của thuật toán {algo}.",
+                insights=insights,
+                fallback=_run_explanation(insights[0]),
+            )
+        )
         _chat_box(
             key=section_key,
             insights=insights,
@@ -351,7 +486,14 @@ def render_comparison_ai_section(results: dict, ranked: list[str]) -> None:
     st.caption("Bấm mở khi bạn muốn xem giải thích so sánh; nếu vẫn chưa rõ thì hỏi thêm bên dưới.")
     section_key = f"compare_{_stable_hash(*insights)}"
     if _toggle_explanation(section_key, "Xem giải thích so sánh các thuật toán"):
-        st.markdown(_comparison_explanation(insights))
+        st.caption("Gemini sẽ được dùng nếu đã cấu hình GEMINI_API_KEY; nếu không, app dùng bộ giải thích nội bộ.")
+        st.markdown(
+            _gemini_or_fallback(
+                task="Giải thích so sánh tổng quan giữa các thuật toán.",
+                insights=insights,
+                fallback=_comparison_explanation(insights),
+            )
+        )
         _chat_box(
             key=section_key,
             insights=insights,
